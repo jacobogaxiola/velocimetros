@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { buildStyles, CircularProgressbar } from 'react-circular-progressbar'
 import GaugeComponent from 'react-gauge-component'
 import ReactSpeedometer from 'react-d3-speedometer'
@@ -7,6 +7,19 @@ import 'react-circular-progressbar/dist/styles.css'
 import './App.css'
 
 const MAX_SPEED = 100
+
+function getDistanceInMeters(firstPosition, secondPosition) {
+  const earthRadius = 6371000
+  const latitudeDelta = ((secondPosition.latitude - firstPosition.latitude) * Math.PI) / 180
+  const longitudeDelta = ((secondPosition.longitude - firstPosition.longitude) * Math.PI) / 180
+  const firstLatitude = (firstPosition.latitude * Math.PI) / 180
+  const secondLatitude = (secondPosition.latitude * Math.PI) / 180
+  const haversine =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(firstLatitude) * Math.cos(secondLatitude) * Math.sin(longitudeDelta / 2) ** 2
+
+  return 2 * earthRadius * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+}
 
 const speedometerOptions = [
   { id: 'd3', label: 'Clásico' },
@@ -172,6 +185,69 @@ function renderModernGauge(theme, speedValue) {
 function App() {
   const [speed, setSpeed] = useState(65)
   const [speedometerType, setSpeedometerType] = useState('d3')
+  const [gpsActive, setGpsActive] = useState(false)
+  const [gpsStatus, setGpsStatus] = useState('GPS desactivado')
+  const lastPositionRef = useRef(null)
+
+  useEffect(() => {
+    if (!gpsActive) {
+      return undefined
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { coords, timestamp } = position
+        const previousPosition = lastPositionRef.current
+        let metersPerSecond = coords.speed
+
+        if (
+          (metersPerSecond === null || !Number.isFinite(metersPerSecond)) &&
+          previousPosition
+        ) {
+          const elapsedSeconds = (timestamp - previousPosition.timestamp) / 1000
+          if (elapsedSeconds > 0) {
+            metersPerSecond =
+              getDistanceInMeters(previousPosition.coords, coords) / elapsedSeconds
+          }
+        }
+
+        lastPositionRef.current = { coords, timestamp }
+        const kilometersPerHour = Math.max(0, (metersPerSecond || 0) * 3.6)
+        setSpeed(Math.min(MAX_SPEED, Math.round(kilometersPerHour)))
+        setGpsStatus('GPS activo')
+      },
+      () => {
+        lastPositionRef.current = null
+        setGpsStatus('No se pudo obtener la ubicación')
+        setGpsActive(false)
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 },
+    )
+
+    return () => navigator.geolocation.clearWatch(watchId)
+  }, [gpsActive])
+
+  function toggleGps() {
+    if (gpsActive) {
+      lastPositionRef.current = null
+      setGpsActive(false)
+      setGpsStatus('GPS desactivado')
+      return
+    }
+
+    if (!navigator.geolocation) {
+      setGpsStatus('GPS no disponible en este dispositivo')
+      return
+    }
+
+    if (!window.isSecureContext) {
+      setGpsStatus('El GPS requiere abrir la app con HTTPS')
+      return
+    }
+
+    setGpsStatus('Buscando ubicación...')
+    setGpsActive(true)
+  }
 
   function renderSpeedometer() {
     if (speedometerType === 'gauge') {
@@ -284,6 +360,13 @@ function App() {
         {renderSpeedometer()}
       </section>
 
+      <div className="gps-control" aria-live="polite">
+        <button type="button" onClick={toggleGps} className={gpsActive ? 'is-active' : ''}>
+          {gpsActive ? 'Desactivar GPS' : 'Activar GPS'}
+        </button>
+        <span>{gpsStatus}</span>
+      </div>
+
       <label className="speed-control">
         <span>
           Velocidad: <strong>{speed} km/h</strong>
@@ -293,6 +376,7 @@ function App() {
           min="0"
           max={MAX_SPEED}
           value={speed}
+          disabled={gpsActive}
           onChange={(event) => setSpeed(Number(event.target.value))}
         />
       </label>

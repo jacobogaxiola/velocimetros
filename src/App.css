@@ -34,7 +34,8 @@
 }
 
 .speedometer-selector button:focus-visible,
-.speed-control input:focus-visible {
+.speed-control input:focus-visible,
+.gps-control button:focus-visible {
   outline: 3px solid #f59e0b;
   outline-offset: 2px;
 }
@@ -218,6 +219,33 @@
   color: var(--text-h);
 }
 
+.gps-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 auto 18px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.gps-control button {
+  padding: 8px 12px;
+  color: var(--text-h);
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.gps-control button.is-active {
+  color: #fff;
+  background: #0f766e;
+  border-color: #0f766e;
+}
+
 .speed-control input {
   width: 100%;
   accent-color: #0f766e;
@@ -245,5 +273,10 @@
 
   .modern-speedometer {
     height: 250px;
+  }
+
+  .gps-control {
+    flex-direction: column;
+    gap: 6px;
   }
 }
