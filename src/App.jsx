@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildStyles, CircularProgressbar } from 'react-circular-progressbar'
 import GaugeComponent from 'react-gauge-component'
+import { QRCodeSVG } from 'qrcode.react'
 import ReactSpeedometer from 'react-d3-speedometer'
 import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts'
 import 'react-circular-progressbar/dist/styles.css'
 import './App.css'
 
 const MAX_SPEED = 100
+const NETWORK_IP = globalThis.__NETWORK_HOST__ || window.location.hostname
 
 function getDistanceInMeters(firstPosition, secondPosition) {
   const earthRadius = 6371000
@@ -339,9 +341,25 @@ function App() {
     )
   }
 
+  const qrUrl = new URL(window.location.href)
+  qrUrl.hostname = NETWORK_IP
+
   return (
     <main id="center">
-      <h1>Velocímetro</h1>
+      <div className="title-row">
+        <h1>Velocímetro</h1>
+        <div className="qr-launch">
+          <QRCodeSVG
+            value={qrUrl.toString()}
+            size={76}
+            bgColor="#ffffff"
+            fgColor="#111827"
+            level="M"
+            aria-label="Código QR para abrir el velocímetro"
+          />
+          <span>Abrir en celular</span>
+        </div>
+      </div>
 
       <div className="speedometer-selector" role="group" aria-label="Tipo de velocímetro">
         {speedometerOptions.map((option) => (
