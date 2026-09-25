@@ -8,6 +8,7 @@ import 'react-circular-progressbar/dist/styles.css'
 import './App.css'
 
 const MAX_SPEED = 100
+const MAX_DISTANCE = 999999
 const NETWORK_IP = globalThis.__NETWORK_HOST__ || window.location.hostname
 
 function getDistanceInMeters(firstPosition, secondPosition) {
@@ -109,7 +110,11 @@ function getModernGaugePoint(speedValue, radius = 104) {
   }
 }
 
-function renderModernGauge(theme, speedValue) {
+function formatOdometer(meters) {
+  return `${Math.floor(meters).toString().padStart(6, '0')} m`
+}
+
+function renderModernGauge(theme, speedValue, odometerMeters, onResetOdometer) {
   const isCockpit = theme === 'cockpit'
   const accent = isCockpit ? '#38bdf8' : '#f43f5e'
   const pointer = getModernGaugePoint(speedValue)
@@ -131,6 +136,7 @@ function renderModernGauge(theme, speedValue) {
 
     return {
       value: index * 10,
+     
       x: 150 + labelRadius * Math.cos(angle),
       y: 125 + labelRadius * Math.sin(angle),
     }
@@ -176,6 +182,24 @@ function renderModernGauge(theme, speedValue) {
         <text x="150" y="108" textAnchor="middle" className="modern-speedometer__unit">
           KM/H
         </text>
+        <g
+          className="modern-speedometer__odo-container"
+          transform="translate(150, 160)"
+          role="button"
+          tabIndex={0}
+          aria-label="Odómetro, doble clic para reiniciar"
+          onDoubleClick={onResetOdometer}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              onResetOdometer()
+            }
+          }}
+        >
+          <rect x="-44" y="-14" width="88" height="28" rx="8" className="modern-speedometer__odo-bg" />
+          <text x="0" y="4" textAnchor="middle" className="modern-speedometer__odometer">
+            {formatOdometer(odometerMeters)}
+          </text>
+        </g>
         <text x="150" y="193" textAnchor="middle" className="modern-speedometer__caption">
           {isCockpit ? 'DRIVE / READY' : 'SPORT'}
         </text>
@@ -189,7 +213,12 @@ function App() {
   const [speedometerType, setSpeedometerType] = useState('d3')
   const [gpsActive, setGpsActive] = useState(false)
   const [gpsStatus, setGpsStatus] = useState('GPS desactivado')
+  const [odometer, setOdometer] = useState(0)
   const lastPositionRef = useRef(null)
+
+  function resetOdometer() {
+    setOdometer(0)
+  }
 
   useEffect(() => {
     if (!gpsActive) {
@@ -201,6 +230,10 @@ function App() {
         const { coords, timestamp } = position
         const previousPosition = lastPositionRef.current
         let metersPerSecond = coords.speed
+
+        if (previousPosition) {
+          setOdometer((previous) => previous + getDistanceInMeters(previousPosition.coords, coords))
+        }
 
         if (
           (metersPerSecond === null || !Number.isFinite(metersPerSecond)) &&
@@ -247,6 +280,7 @@ function App() {
       return
     }
 
+    setOdometer(0)
     setGpsStatus('Buscando ubicación...')
     setGpsActive(true)
   }
@@ -324,11 +358,11 @@ function App() {
     }
 
     if (speedometerType === 'modern-sport') {
-      return renderModernGauge('sport', speed)
+      return renderModernGauge('sport', speed, odometer, resetOdometer)
     }
 
     if (speedometerType === 'modern-cockpit') {
-      return renderModernGauge('cockpit', speed)
+      return renderModernGauge('cockpit', speed, odometer, resetOdometer)
     }
 
     return (
@@ -361,18 +395,20 @@ function App() {
         </div>
       </div>
 
-      <div className="speedometer-selector" role="group" aria-label="Tipo de velocímetro">
-        {speedometerOptions.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className={speedometerType === option.id ? 'is-active' : ''}
-            onClick={() => setSpeedometerType(option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <label className="speedometer-selector" htmlFor="speedometer-type">
+        <select
+          id="speedometer-type"
+          aria-label="Tipo de velocímetro"
+          value={speedometerType}
+          onChange={(event) => setSpeedometerType(event.target.value)}
+        >
+          {speedometerOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <section className="speedometer-display" aria-live="polite">
         {renderSpeedometer()}
@@ -396,6 +432,21 @@ function App() {
           value={speed}
           disabled={gpsActive}
           onChange={(event) => setSpeed(Number(event.target.value))}
+        />
+      </label>
+
+      <label className="speed-control">
+        <span>
+          Distancia: <strong>{formatOdometer(odometer)}</strong>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max={MAX_DISTANCE}
+          step="10"
+          value={Math.round(odometer)}
+          disabled={gpsActive}
+          onChange={(event) => setOdometer(Number(event.target.value))}
         />
       </label>
     </main>
