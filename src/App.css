@@ -264,10 +264,213 @@
   filter: drop-shadow(0 0 3px rgba(74, 222, 128, 0.65));
 }
 
-.modern-speedometer__reset-label {
-  fill: #f8fafc;
+.modern-speedometer__battery {
+  cursor: pointer;
+}
+
+.modern-speedometer__battery-body {
+  fill: rgba(15, 23, 42, 0.45);
+  stroke: rgba(226, 232, 240, 0.55);
+  stroke-width: 1.4;
+  transition: stroke 0.15s ease;
+}
+
+.modern-speedometer__battery-nub {
+  fill: rgba(226, 232, 240, 0.55);
+}
+
+.modern-speedometer__battery:hover .modern-speedometer__battery-body,
+.modern-speedometer__battery:focus-visible .modern-speedometer__battery-body {
+  stroke: #f59e0b;
+}
+
+.modern-speedometer__battery-label {
+  fill: rgba(226, 232, 240, 0.8);
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.modern-speedometer__weather {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.modern-speedometer__weather:hover,
+.modern-speedometer__weather:focus-visible {
+  filter: drop-shadow(0 0 5px rgba(125, 211, 252, 0.75));
+}
+
+.modern-speedometer__temperature {
+  fill: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.62);
+  z-index: 60;
+}
+
+.forecast-modal {
+  width: min(100%, 560px);
+  max-height: min(84vh, 720px);
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.forecast-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.forecast-modal__header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.forecast-modal__header button {
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-h);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.forecast-modal__header button:focus-visible {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.forecast-modal__status {
+  margin: 18px 0 4px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.forecast-modal__list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: 4px;
+}
+
+.forecast-modal__row {
+  min-height: 52px;
+  display: grid;
+  grid-template-columns: 48px 40px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.forecast-modal__row:last-child {
+  border-bottom: 0;
+}
+
+.forecast-modal__row img {
+  display: block;
+}
+
+.forecast-modal__description {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.forecast-modal__row strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.battery-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.55);
+  z-index: 50;
+}
+
+.battery-modal {
+  width: min(90vw, 320px);
+  padding: 20px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.battery-modal h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.battery-modal form {
+  display: grid;
+  gap: 14px;
+}
+
+.battery-modal label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.battery-modal input {
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.battery-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.battery-modal__actions button {
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-h);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.battery-modal__actions button.is-active {
+  color: #fff;
+  background: #0f766e;
+  border-color: #0f766e;
 }
 
 .speed-control {

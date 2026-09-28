@@ -1,15 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
-import { buildStyles, CircularProgressbar } from 'react-circular-progressbar'
-import GaugeComponent from 'react-gauge-component'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import ReactSpeedometer from 'react-d3-speedometer'
-import { PolarAngleAxis, RadialBar, RadialBarChart, ResponsiveContainer } from 'recharts'
-import 'react-circular-progressbar/dist/styles.css'
+import {
+  ClassicSpeedometer,
+  CircularSpeedometer,
+  GaugeSpeedometer,
+  RadialSpeedometer,
+} from './components/speedometers/BasicSpeedometers'
+import { MAX_SPEED } from './components/speedometers/constants'
+import { ModernSpeedometer } from './components/speedometers/ModernSpeedometer'
+import { TeslaSpeedometer } from './components/speedometers/TeslaSpeedometer'
+import { formatOdometer } from './components/speedometers/utils'
+import HourlyForecastModal from './components/weather/HourlyForecastModal'
 import './App.css'
 
-const MAX_SPEED = 100
 const MAX_DISTANCE = 999999
 const NETWORK_IP = globalThis.__NETWORK_HOST__ || window.location.hostname
+const STORAGE_KEY = 'adw-dashboard-state'
+const DEFAULT_AUTONOMY_KM = 300
+const DEFAULT_BATTERY_PERCENT = 100
+
+function loadPersistedState() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function computeChargePercent(batteryOdometerMeters, baseline, autonomyKm) {
+  if (!autonomyKm || autonomyKm <= 0) {
+    return Math.min(100, Math.max(0, baseline.percent))
+  }
+
+  const distanceKm = (batteryOdometerMeters - baseline.odometerMeters) / 1000
+  const consumedPercent = (distanceKm / autonomyKm) * 100
+
+  return Math.min(100, Math.max(0, baseline.percent - consumedPercent))
+}
 
 function getDistanceInMeters(firstPosition, secondPosition) {
   const earthRadius = 6371000
@@ -35,189 +63,132 @@ const speedometerOptions = [
   { id: 'modern-cockpit', label: 'Cockpit' },
 ]
 
-function getTeslaGaugePoint(speedValue, radius = 110) {
-  const progress = Math.min(Math.max(speedValue / MAX_SPEED, 0), 1)
-  const angle = Math.PI * (1 - progress)
-
-  return {
-    x: 150 + radius * Math.cos(angle),
-    y: 150 - radius * Math.sin(angle),
-  }
-}
-
-function renderTeslaGauge(theme, speedValue) {
-  const isCyber = theme === 'cyber'
-  const primary = isCyber ? '#f97316' : '#7dd3fc'
-  const secondary = isCyber ? '#facc15' : '#dbeafe'
-  const glow = isCyber ? 'rgba(249, 115, 22, 0.45)' : 'rgba(125, 211, 252, 0.45)'
-  const pointer = getTeslaGaugePoint(speedValue)
-
-  return (
-    <div className={`tesla-speedometer tesla-speedometer--${theme}`}>
-      <svg viewBox="0 0 300 200" role="img" aria-label={`${speedValue} kilómetros por hora`}>
-        <defs>
-          <linearGradient id={`${theme}-tesla-gradient`} x1="0%" x2="100%" y1="0%" y2="0%">
-            <stop offset="0%" stopColor={secondary} />
-            <stop offset="45%" stopColor={primary} />
-            <stop offset="100%" stopColor="#ffffff" />
-          </linearGradient>
-        </defs>
-
-        <path
-          d="M 30 150 A 120 120 0 0 1 270 150"
-          className="tesla-speedometer__track"
-        />
-        <path
-          d="M 30 150 A 120 120 0 0 1 270 150"
-          className="tesla-speedometer__progress"
-          pathLength={100}
-          stroke={`url(#${theme}-tesla-gradient)`}
-          strokeDasharray={`${(speedValue / MAX_SPEED) * 100} 100`}
-          strokeLinecap="round"
-        />
-
-        <line
-          x1="150"
-          y1="150"
-          x2={pointer.x}
-          y2={pointer.y}
-          className="tesla-speedometer__needle"
-          stroke="#f5f5f5"
-          strokeWidth="5"
-          strokeLinecap="round"
-        />
-        <circle cx="150" cy="150" r="8" fill={primary} stroke="#f8fafc" strokeWidth="3" />
-        <circle cx="150" cy="150" r="20" fill={glow} opacity="0.35" />
-
-        <text x="150" y="92" textAnchor="middle" className="tesla-speedometer__value">
-          {speedValue}
-        </text>
-        <text x="150" y="116" textAnchor="middle" className="tesla-speedometer__unit">
-          km/h
-        </text>
-      </svg>
-    </div>
-  )
-}
-
-function getModernGaugePoint(speedValue, radius = 104) {
-  const progress = Math.min(Math.max(speedValue / MAX_SPEED, 0), 1)
-  const angle = ((140 + progress * 260) * Math.PI) / 180
-
-  return {
-    x: 150 + radius * Math.cos(angle),
-    y: 125 + radius * Math.sin(angle),
-  }
-}
-
-function formatOdometer(meters) {
-  return `${Math.floor(meters).toString().padStart(6, '0')} m`
-}
-
-function renderModernGauge(theme, speedValue, odometerMeters, onResetOdometer) {
-  const isCockpit = theme === 'cockpit'
-  const accent = isCockpit ? '#38bdf8' : '#f43f5e'
-  const pointer = getModernGaugePoint(speedValue)
-  const ticks = Array.from({ length: 11 }, (_, index) => {
-    const angle = ((140 + index * 26) * Math.PI) / 180
-    const outerRadius = 101
-    const innerRadius = index % 5 === 0 ? 90 : 95
-
-    return {
-      x1: 150 + innerRadius * Math.cos(angle),
-      y1: 125 + innerRadius * Math.sin(angle),
-      x2: 150 + outerRadius * Math.cos(angle),
-      y2: 125 + outerRadius * Math.sin(angle),
-    }
-  })
-  const scaleLabels = Array.from({ length: 11 }, (_, index) => {
-    const angle = ((140 + index * 26) * Math.PI) / 180
-    const labelRadius = 111
-
-    return {
-      value: index * 10,
-     
-      x: 150 + labelRadius * Math.cos(angle),
-      y: 125 + labelRadius * Math.sin(angle),
-    }
-  })
-
-  return (
-    <div className={`modern-speedometer modern-speedometer--${theme}`}>
-      <svg viewBox="0 0 300 245" role="img" aria-label={`${speedValue} kilómetros por hora`}>
-        <path d="M 79.5 184 A 92 92 0 1 1 220.5 184" className="modern-speedometer__track" />
-        <path
-          d="M 79.5 184 A 92 92 0 1 1 220.5 184"
-          className="modern-speedometer__progress"
-          pathLength="100"
-          stroke={accent}
-          strokeDasharray={`${(speedValue / MAX_SPEED) * 100} 100`}
-        />
-        {ticks.map((tick, index) => (
-          <line key={index} {...tick} className="modern-speedometer__tick" />
-        ))}
-        {scaleLabels.map((label) => (
-          <text
-            key={label.value}
-            x={label.x}
-            y={label.y}
-            textAnchor="middle"
-            className="modern-speedometer__scale"
-          >
-            {label.value}
-          </text>
-        ))}
-        <line
-          x1="150"
-          y1="125"
-          x2={pointer.x}
-          y2={pointer.y}
-          className="modern-speedometer__needle"
-          stroke={accent}
-        />
-        <circle cx="150" cy="125" r="9" fill={accent} className="modern-speedometer__hub" />
-        <text x="150" y="96" textAnchor="middle" className="modern-speedometer__value">
-          {speedValue}
-        </text>
-        <text x="150" y="108" textAnchor="middle" className="modern-speedometer__unit">
-          KM/H
-        </text>
-        <g
-          className="modern-speedometer__odo-container"
-          transform="translate(150, 160)"
-          role="button"
-          tabIndex={0}
-          aria-label="Odómetro, doble clic para reiniciar"
-          onDoubleClick={onResetOdometer}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              onResetOdometer()
-            }
-          }}
-        >
-          <rect x="-44" y="-14" width="88" height="28" rx="8" className="modern-speedometer__odo-bg" />
-          <text x="0" y="4" textAnchor="middle" className="modern-speedometer__odometer">
-            {formatOdometer(odometerMeters)}
-          </text>
-        </g>
-        <text x="150" y="193" textAnchor="middle" className="modern-speedometer__caption">
-          {isCockpit ? 'DRIVE / READY' : 'SPORT'}
-        </text>
-      </svg>
-    </div>
-  )
-}
-
 function App() {
-  const [speed, setSpeed] = useState(65)
+  const persistedState = useMemo(() => loadPersistedState(), [])
+
+  const [speed, setSpeed] = useState(persistedState.speed ?? 65)
   const [speedometerType, setSpeedometerType] = useState('d3')
   const [gpsActive, setGpsActive] = useState(false)
   const [gpsStatus, setGpsStatus] = useState('GPS desactivado')
-  const [odometer, setOdometer] = useState(0)
+  const [odometer, setOdometer] = useState(persistedState.tripOdometer ?? 0)
+  const [batteryOdometer, setBatteryOdometer] = useState(persistedState.batteryOdometer ?? 0)
+  const [autonomyKm, setAutonomyKm] = useState(persistedState.autonomyKm ?? DEFAULT_AUTONOMY_KM)
+  const [batteryBaseline, setBatteryBaseline] = useState(
+    persistedState.batteryBaseline ?? { percent: DEFAULT_BATTERY_PERCENT, odometerMeters: 0 },
+  )
+  const [isBatteryModalOpen, setBatteryModalOpen] = useState(false)
+  const [isForecastModalOpen, setForecastModalOpen] = useState(false)
+  const [chargeDraft, setChargeDraft] = useState(DEFAULT_BATTERY_PERCENT)
+  const [autonomyDraft, setAutonomyDraft] = useState(DEFAULT_AUTONOMY_KM)
+  const [weather, setWeather] = useState({
+    temperature: null,
+    icon: null,
+    description: 'Clima pendiente',
+  })
   const lastPositionRef = useRef(null)
+  const isModernGauge = speedometerType === 'modern-sport' || speedometerType === 'modern-cockpit'
+
+  const chargePercent = computeChargePercent(batteryOdometer, batteryBaseline, autonomyKm)
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const payload = { speed, tripOdometer: odometer, batteryOdometer, autonomyKm, batteryBaseline }
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    }, 250)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [speed, odometer, batteryOdometer, autonomyKm, batteryBaseline])
+
+  useEffect(() => {
+    if (!isModernGauge) {
+      return undefined
+    }
+
+    let isCurrent = true
+
+    async function loadWeather(latitude, longitude) {
+      const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY
+      if (!apiKey) {
+        setWeather({ temperature: null, icon: null, description: 'Falta configurar OpenWeather' })
+        return
+      }
+
+      const query = new URLSearchParams({
+        lat: String(latitude),
+        lon: String(longitude),
+        appid: apiKey,
+        units: 'metric',
+        lang: 'es',
+      })
+
+      try {
+        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?${query}`)
+        if (!response.ok) {
+          throw new Error('No se pudo consultar OpenWeather')
+        }
+
+        const result = await response.json()
+        if (isCurrent) {
+          setWeather({
+            temperature: result.main.temp,
+            icon: result.weather[0].icon,
+            description: result.weather[0].description,
+          })
+        }
+      } catch {
+        if (isCurrent) {
+          setWeather({ temperature: null, icon: null, description: 'Clima no disponible' })
+        }
+      }
+    }
+
+    function requestWeather() {
+      if (!navigator.geolocation) {
+        setWeather({ temperature: null, icon: null, description: 'Ubicación no disponible' })
+        return
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => loadWeather(coords.latitude, coords.longitude),
+        () => setWeather({ temperature: null, icon: null, description: 'Ubicación no disponible' }),
+        { enableHighAccuracy: false, maximumAge: 600000, timeout: 10000 },
+      )
+    }
+
+    requestWeather()
+    const intervalId = window.setInterval(requestWeather, 600000)
+
+    return () => {
+      isCurrent = false
+      window.clearInterval(intervalId)
+    }
+  }, [isModernGauge])
 
   function resetOdometer() {
     setOdometer(0)
+  }
+
+  function openBatteryModal() {
+    setChargeDraft(Math.round(chargePercent))
+    setAutonomyDraft(autonomyKm)
+    setBatteryModalOpen(true)
+  }
+
+  function closeBatteryModal() {
+    setBatteryModalOpen(false)
+  }
+
+  function closeForecastModal() {
+    setForecastModalOpen(false)
+  }
+
+  function saveBatteryModal(event) {
+    event.preventDefault()
+    const clampedCharge = Math.min(100, Math.max(0, Number(chargeDraft)))
+    const parsedAutonomy = Math.max(1, Number(autonomyDraft) || 1)
+    setBatteryBaseline({ percent: clampedCharge, odometerMeters: batteryOdometer })
+    setAutonomyKm(parsedAutonomy)
+    setBatteryModalOpen(false)
   }
 
   useEffect(() => {
@@ -232,7 +203,9 @@ function App() {
         let metersPerSecond = coords.speed
 
         if (previousPosition) {
-          setOdometer((previous) => previous + getDistanceInMeters(previousPosition.coords, coords))
+          const deltaMeters = getDistanceInMeters(previousPosition.coords, coords)
+          setOdometer((previous) => previous + deltaMeters)
+          setBatteryOdometer((previous) => previous + deltaMeters)
         }
 
         if (
@@ -286,93 +259,48 @@ function App() {
   }
 
   function renderSpeedometer() {
-    if (speedometerType === 'gauge') {
+    if (speedometerType === 'modern-sport') {
       return (
-        <GaugeComponent
-          value={speed}
-          minValue={0}
-          maxValue={MAX_SPEED}
-          arc={{
-            width: 0.3,
-            padding: 0.02,
-            subArcs: [
-              { limit: 333, color: '#224ec5' },
-              { limit: 666, color: '#f59e0b' },
-              { color: '#ef4444' },
-            ],
-          }}
-          pointer={{ type: 'needle', color: '#f1e313', length: 0.75 }}
-          labels={{
-            valueLabel: { formatTextValue: (value) => `${value} km/h` },
-          }}
+        <ModernSpeedometer
+          theme="sport"
+          speed={speed}
+          odometerMeters={odometer}
+          onResetOdometer={resetOdometer}
+          chargePercent={chargePercent}
+          onOpenBatteryModal={openBatteryModal}
+          weather={weather}
+          onOpenWeatherForecast={() => setForecastModalOpen(true)}
         />
       )
     }
 
-    if (speedometerType === 'circular') {
+    if (speedometerType === 'modern-cockpit') {
       return (
-        <div className="circular-speedometer">
-          <CircularProgressbar
-            value={speed}
-            maxValue={MAX_SPEED}
-            text={`${speed} km/h`}
-            styles={buildStyles({
-              pathColor: '#0f766e',
-              textColor: '#172033',
-              trailColor: '#d8e1e8',
-            })}
-          />
-        </div>
-      )
-    }
-
-    if (speedometerType === 'radial') {
-      return (
-        <div className="radial-speedometer">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadialBarChart
-              cx="50%"
-              cy="50%"
-              innerRadius="68%"
-              outerRadius="100%"
-              barSize={28}
-              data={[{ speed, fill: '#d35b37' }]}
-              startAngle={90}
-              endAngle={-270}
-            >
-              <PolarAngleAxis type="number" domain={[0, MAX_SPEED]} tick={false} />
-              <RadialBar background dataKey="speed" cornerRadius={14} />
-            </RadialBarChart>
-          </ResponsiveContainer>
-          <span>{speed} km/h</span>
-        </div>
+        <ModernSpeedometer
+          theme="cockpit"
+          speed={speed}
+          odometerMeters={odometer}
+          onResetOdometer={resetOdometer}
+          chargePercent={chargePercent}
+          onOpenBatteryModal={openBatteryModal}
+          weather={weather}
+          onOpenWeatherForecast={() => setForecastModalOpen(true)}
+        />
       )
     }
 
     if (speedometerType === 'tesla-plaid') {
-      return renderTeslaGauge('plaid', speed)
+      return <TeslaSpeedometer theme="plaid" speed={speed} />
     }
 
     if (speedometerType === 'tesla-cyber') {
-      return renderTeslaGauge('cyber', speed)
+      return <TeslaSpeedometer theme="cyber" speed={speed} />
     }
 
-    if (speedometerType === 'modern-sport') {
-      return renderModernGauge('sport', speed, odometer, resetOdometer)
-    }
-
-    if (speedometerType === 'modern-cockpit') {
-      return renderModernGauge('cockpit', speed, odometer, resetOdometer)
-    }
-
-    return (
-      <ReactSpeedometer
-        value={speed}
-        minValue={0}
-        maxValue={MAX_SPEED}
-        currentValueText="${value} km/h"
-      />
-    )
+    if (speedometerType === 'gauge') return <GaugeSpeedometer speed={speed} />
+    if (speedometerType === 'circular') return <CircularSpeedometer speed={speed} />
+    if (speedometerType === 'radial') return <RadialSpeedometer speed={speed} />
+    return <ClassicSpeedometer speed={speed} />
   }
 
   const qrUrl = new URL(window.location.href)
@@ -446,9 +374,57 @@ function App() {
           step="10"
           value={Math.round(odometer)}
           disabled={gpsActive}
-          onChange={(event) => setOdometer(Number(event.target.value))}
+          onChange={(event) => {
+            const newValue = Number(event.target.value)
+            setBatteryOdometer((previous) => previous + (newValue - odometer))
+            setOdometer(newValue)
+          }}
         />
       </label>
+
+      {isBatteryModalOpen && (
+        <div className="battery-modal-backdrop" role="presentation" onClick={closeBatteryModal}>
+          <div
+            className="battery-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Calibrar batería"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2>Calibrar batería</h2>
+            <form onSubmit={saveBatteryModal}>
+              <label>
+                <span>Carga actual (%)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={chargeDraft}
+                  onChange={(event) => setChargeDraft(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Autonomía total (km)</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={autonomyDraft}
+                  onChange={(event) => setAutonomyDraft(event.target.value)}
+                />
+              </label>
+              <div className="battery-modal__actions">
+                <button type="button" onClick={closeBatteryModal}>
+                  Cancelar
+                </button>
+                <button type="submit" className="is-active">
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {isForecastModalOpen && <HourlyForecastModal onClose={closeForecastModal} />}
     </main>
   )
 }
